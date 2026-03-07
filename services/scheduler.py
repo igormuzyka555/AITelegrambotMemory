@@ -1,17 +1,19 @@
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from datetime import datetime, timedelta
 from aiogram import Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-import os
 
-scheduler = AsyncIOScheduler()
+MOSCOW_TZ = pytz.timezone("Europe/Moscow")
+scheduler = AsyncIOScheduler(timezone=MOSCOW_TZ)
 
 
 def start_scheduler():
     scheduler.start()
 
 
+# ── ТРИАЛ ─────────────────────────────────────────────
 async def send_trial_ending(bot: Bot, user_id: int, first_name: str):
     builder = InlineKeyboardBuilder()
     builder.button(text="💜 Оформить подписку — 299 ₽/мес", callback_data="subscribe")
@@ -28,7 +30,6 @@ async def send_trial_ending(bot: Bot, user_id: int, first_name: str):
 def schedule_trial_ending(bot: Bot, user_id: int, first_name: str, trial_start: datetime):
     remind_at = trial_start + timedelta(days=5)
 
-    # Если время уже прошло — не планируем
     if remind_at <= datetime.utcnow():
         return
 
@@ -39,3 +40,32 @@ def schedule_trial_ending(bot: Bot, user_id: int, first_name: str, trial_start: 
         id=f"trial_{user_id}",
         replace_existing=True
     )
+
+
+# ── НАПОМИНАНИЯ О ЗАДАЧАХ ──────────────────────────────
+def schedule_reminder(bot: Bot, entry_id: int, user_id: int, remind_at: datetime):
+    """Запланировать напоминание о задаче"""
+    # Конвертируем UTC время в московское для APScheduler
+    if remind_at.tzinfo is None:
+        remind_at = pytz.utc.localize(remind_at).astimezone(MOSCOW_TZ)
+
+    scheduler.add_job(
+        send_reminder_job,
+        trigger=DateTrigger(run_date=remind_at),
+        args=[bot, entry_id, user_id],
+        id=f"reminder_{entry_id}",
+        replace_existing=True
+    )
+
+
+async def send_reminder_job(bot: Bot, entry_id: int, user_id: int):
+    """Джоб который запускает APScheduler"""
+    from services.reminder_service import send_reminder
+    await send_reminder(bot, entry_id, user_id)
+
+
+def cancel_reminder(entry_id: int):
+    """Отменить все будущие напоминания для задачи"""
+    job_id = f"reminder_{entry_id}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)

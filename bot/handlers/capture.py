@@ -2,6 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters import StateFilter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from services.openai_service import transcribe, classify, CATEGORY_EMOJI
 from database.crud import save_entry
@@ -32,7 +33,7 @@ async def ask_when_to_remind(message: Message, summary: str, entry_id: int):
     )
 
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(F.text & ~F.text.startswith("/"), StateFilter(None))
 async def handle_text(message: Message, state: FSMContext):
     if message.text.lower().startswith("передаю сообщение для"):
         return
@@ -55,8 +56,14 @@ async def handle_text(message: Message, state: FSMContext):
 
     if result.get("category") in ("task", "repeat"):
         if result.get("has_explicit_time") and result.get("remind_at"):
+            # GPT определил конкретное время — планируем сразу
+            from services.scheduler import schedule_reminder
+            import main as app
+            remind_at = datetime.fromisoformat(result.get("remind_at"))
+            schedule_reminder(app.bot, entry_id, message.from_user.id, remind_at)
             await message.answer(f"{emoji} Задача: {summary}\nНапомню в указанное время. ⏰")
         else:
+            # Время не указано — спрашиваем пользователя
             await ask_when_to_remind(message, summary, entry_id)
     else:
         await message.answer(f"{emoji} {summary}")
@@ -93,8 +100,14 @@ async def handle_voice(message: Message, state: FSMContext):
 
         if result.get("category") in ("task", "repeat"):
             if result.get("has_explicit_time") and result.get("remind_at"):
+                # GPT определил конкретное время — планируем сразу
+                from services.scheduler import schedule_reminder
+                import main as app
+                remind_at = datetime.fromisoformat(result.get("remind_at"))
+                schedule_reminder(app.bot, entry_id, message.from_user.id, remind_at)
                 await message.answer(f"{emoji} Задача: {summary}\nНапомню в указанное время. ⏰")
             else:
+                # Время не указано — спрашиваем пользователя
                 await ask_when_to_remind(message, summary, entry_id)
         else:
             await message.answer(f"{emoji} {summary}")
@@ -105,7 +118,9 @@ async def handle_voice(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("remind_"))
 async def handle_reminder_choice(callback: CallbackQuery, state: FSMContext):
-    from database.crud import update_entry_remind_at
+    from database.crud import update_entry_remind_at, get_entry
+    from services.scheduler import schedule_reminder, cancel_reminder
+    import main as app
 
     parts = callback.data.split("_")
     entry_id = int(parts[-1])
@@ -142,7 +157,11 @@ async def handle_reminder_choice(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    entry = get_entry(entry_id)
     update_entry_remind_at(entry_id, remind_at)
+    cancel_reminder(entry_id)
+    schedule_reminder(app.bot, entry_id, entry.user_id, remind_at)
+
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(f"⏰ Напомню {label}!")
     await callback.answer()
@@ -150,8 +169,10 @@ async def handle_reminder_choice(callback: CallbackQuery, state: FSMContext):
 
 @router.message(CaptureFSM.waiting_for_custom_time)
 async def handle_custom_time(message: Message, state: FSMContext):
-    from database.crud import update_entry_remind_at
+    from database.crud import update_entry_remind_at, get_entry
     from services.openai_service import parse_time
+    from services.scheduler import schedule_reminder, cancel_reminder
+    import main as app
 
     data = await state.get_data()
     entry_id = data.get("entry_id")
@@ -159,7 +180,10 @@ async def handle_custom_time(message: Message, state: FSMContext):
     remind_at = await parse_time(message.text)
 
     if remind_at:
+        entry = get_entry(entry_id)
         update_entry_remind_at(entry_id, remind_at)
+        cancel_reminder(entry_id)
+        schedule_reminder(app.bot, entry_id, entry.user_id, remind_at)
         await message.answer(f"⏰ Напомню {remind_at.strftime('%d.%m в %H:%M')}!")
     else:
         await message.answer("Не понял время 😕 Попробуй иначе, например «завтра в 10:00»")

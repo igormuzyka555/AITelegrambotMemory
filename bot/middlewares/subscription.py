@@ -21,31 +21,25 @@ class SubscriptionMiddleware(BaseMiddleware):
         else:
             return await handler(event, data)
 
-        user = get_or_create_user(user_id)
+        # ВРЕМЕННО ОТКЛЮЧЕНО — для тестирования
+        return await handler(event, data)
 
-        # Если подписан — пропускаем
-        if user.is_subscribed:
-            return await handler(event, data)
-
-        # Проверяем триал
-        if user.trial_start:
-            days_passed = (datetime.utcnow() - user.trial_start).days
-            if days_passed <= 7:
-                return await handler(event, data)
-
-        # Триал истёк — мягко предлагаем оплатить
-        builder = InlineKeyboardBuilder()
-        builder.button(text="💜 Оформить подписку — 299 ₽/мес", callback_data="subscribe")
-
-        text = (
-            "Твой бесплатный период закончился 🙁\n\n"
-            "Все твои записи сохранены. Чтобы продолжить — "
-            "оформи подписку за 299 ₽ в месяц."
-        )
-
-        if isinstance(event, Message):
-            await event.answer(text, reply_markup=builder.as_markup())
-        elif isinstance(event, CallbackQuery):
-            await event.message.answer(text, reply_markup=builder.as_markup())
-
-        return  # Не пускаем дальше
+        # user = get_or_create_user(user_id)
+        # if user.is_subscribed:
+        #     return await handler(event, data)
+        # if user.trial_start:
+        #     days_passed = (datetime.utcnow() - user.trial_start).days
+        #     if days_passed <= 7:
+        #         return await handler(event, data)
+        # builder = InlineKeyboardBuilder()
+        # builder.button(text="💜 Оформить подписку — 299 ₽/мес", callback_data="subscribe")
+        # text = (
+        #     "Твой бесплатный период закончился 🙁\n\n"
+        #     "Все твои записи сохранены. Чтобы продолжить — "
+        #     "оформи подписку за 299 ₽ в месяц."
+        # )
+        # if isinstance(event, Message):
+        #     await event.answer(text, reply_markup=builder.as_markup())
+        # elif isinstance(event, CallbackQuery):
+        #     await event.message.answer(text, reply_markup=builder.as_markup())
+        # return
