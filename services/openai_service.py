@@ -1,32 +1,43 @@
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
-import os
+import whisper
+import ollama
 import json
 import re
 from datetime import datetime
+import asyncio
 
-load_dotenv()
+# Загружаем Whisper модель один раз при старте
+_whisper_model = None
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        print("Загружаю Whisper medium...")
+        _whisper_model = whisper.load_model("medium")
+        print("Whisper готов!")
+    return _whisper_model
+
 
 CLASSIFY_PROMPT = """
 Ты — система классификации записей для личного помощника памяти.
 
 Пользователь говорит или пишет что-то — твоя задача разобрать это и вернуть JSON.
 
-Категории:
-- task — задача, что-то нужно сделать
-- idea — идея, мысль о проекте или жизни
-- note — заметка, наблюдение, факт
-- state — состояние, как себя чувствует
-- goal — цель, чего хочет достичь
-- repeat — повторяющаяся задача
-- question — что хочет выяснить или спросить
-- chaos — непонятно что
+Категории (выбирай ОДНУ, самую точную):
+- task — нужно что-то сделать, купить, позвонить, вернуть, отправить. Если есть глагол действия — это task.
+- idea — мысль, идея, что-то придумал, новая концепция
+- note — наблюдение, факт, что-то интересное, просто запомнить
+- state — как себя чувствует, настроение, самочувствие
+- goal — цель на будущее, чего хочет достичь
+- repeat — задача которую надо делать РЕГУЛЯРНО (каждый день, каждую неделю)
+- question — хочет что-то выяснить, загуглить, спросить у кого-то
+- chaos — совсем непонятно что имел в виду
+
+ВАЖНО: «купить», «сделать», «позвонить», «вернуть», «убрать» — всегда task, не repeat!
+repeat только если явно сказано «каждый день», «еженедельно», «регулярно».
 
 Также определи:
-- source: 'guest' если человек явно передаёт сообщение кому-то другому (например «скажи Антону», «передай что»), иначе 'owner'
-- remind_at: если в тексте есть конкретное время или дата — верни в формате ISO 8601, иначе null
+- source: 'guest' если человек передаёт сообщение кому-то другому («скажи Антону», «передай что»), иначе 'owner'
+- remind_at: если есть конкретное время или дата — верни в формате ISO 8601, иначе null
 - has_explicit_time: true если время указано явно, false если нет
 
 Верни ТОЛЬКО валидный JSON без markdown и пояснений:
@@ -52,34 +63,39 @@ CATEGORY_EMOJI = {
 
 
 async def transcribe(audio_path: str) -> str:
-    """Расшифровка голосового через Whisper"""
-    with open(audio_path, "rb") as audio_file:
-        response = await client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
-    return response.text
+    """Расшифровка голосового через локальный Whisper (GPU)"""
+    model = get_whisper_model()
+    # Запускаем в executor чтобы не блокировать async loop
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: model.transcribe(audio_path, language="ru")
+    )
+    return result["text"].strip()
 
 
 async def classify(text: str) -> dict:
-    """Классификация текста через GPT-4o"""
+    """Классификация текста через локальный Mistral (Ollama)"""
     for attempt in range(3):
         try:
-            response = await client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": CLASSIFY_PROMPT},
-                    {"role": "user", "content": text}
-                ],
-                temperature=0
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: ollama.chat(
+                    model="mistral",
+                    messages=[
+                        {"role": "system", "content": CLASSIFY_PROMPT},
+                        {"role": "user", "content": text}
+                    ],
+                    options={"temperature": 0}
+                )
             )
-            raw = response.choices[0].message.content.strip()
-            # Убираем markdown если вдруг появился
+            raw = response["message"]["content"].strip()
             raw = re.sub(r"```json|```", "", raw).strip()
             return json.loads(raw)
         except Exception as e:
+            print(f"Ошибка classify (попытка {attempt + 1}): {e}")
             if attempt == 2:
-                # Если все попытки провалились — возвращаем базовый результат
                 return {
                     "category": "chaos",
                     "summary": text[:100],
@@ -89,30 +105,88 @@ async def classify(text: str) -> dict:
                 }
 
 
-
 async def parse_time(text: str) -> datetime | None:
-    """Парсинг свободного текста времени через GPT-4o"""
-    from datetime import datetime
-    now = datetime.utcnow()
+    """Парсинг времени — сначала простые паттерны в коде, потом Mistral"""
+    import pytz
+    from datetime import timedelta
+    moscow_tz = pytz.timezone("Europe/Moscow")
+    now = datetime.now(moscow_tz)
+    t = text.strip().lower()
 
+    # ── Простые паттерны считаем сами ──────────────────────────────
+    # «через X минут»
+    m = re.search(r"через\s+(\d+)\s+мин", t)
+    if m:
+        return now + timedelta(minutes=int(m.group(1)))
+
+    # «через X час»
+    m = re.search(r"через\s+(\d+)\s+час", t)
+    if m:
+        return now + timedelta(hours=int(m.group(1)))
+
+    # «через X дн» / «через X день» / «через X дней»
+    m = re.search(r"через\s+(\d+)\s+д", t)
+    if m:
+        return now + timedelta(days=int(m.group(1)))
+
+    # «в ЧЧ:ММ»
+    m = re.search(r"в\s+(\d{1,2}):(\d{2})", t)
+    if m:
+        result = now.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)
+        if result < now:
+            result += timedelta(days=1)
+        return result
+
+    # «в ЧЧ» (без минут)
+    m = re.search(r"в\s+(\d{1,2})($|\s)", t)
+    if m:
+        result = now.replace(hour=int(m.group(1)), minute=0, second=0, microsecond=0)
+        if result < now:
+            result += timedelta(days=1)
+        return result
+
+    # «завтра в ЧЧ:ММ»
+    m = re.search(r"завтра.*?(\d{1,2}):(\d{2})", t)
+    if m:
+        tomorrow = now + timedelta(days=1)
+        return tomorrow.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)
+
+    # «завтра в ЧЧ»
+    m = re.search(r"завтра.*?(\d{1,2})", t)
+    if m:
+        tomorrow = now + timedelta(days=1)
+        return tomorrow.replace(hour=int(m.group(1)), minute=0, second=0, microsecond=0)
+
+    # «завтра» без времени — утром в 9:00
+    if "завтра" in t:
+        tomorrow = now + timedelta(days=1)
+        return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
+
+    # ── Сложные случаи — отдаём Mistral ────────────────────────────
     try:
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": f"""
-Сейчас: {now.strftime('%Y-%m-%d %H:%M')} UTC.
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: ollama.chat(
+                model="mistral",
+                messages=[
+                    {"role": "system", "content": f"""Сейчас по московскому времени: {now.strftime('%Y-%m-%d %H:%M')} (UTC+3).
 Пользователь написал время в свободной форме.
-Переведи в формат ISO 8601 (например 2026-02-25T15:30:00).
-Верни ТОЛЬКО дату и время в формате ISO 8601, ничего больше.
-Если не можешь определить — верни null.
-"""},
-                {"role": "user", "content": text}
-            ],
-            temperature=0
+Вычисли точное московское время и верни ТОЛЬКО в формате ISO 8601 (например 2026-03-08T23:19:00).
+Ничего кроме даты. Если не можешь — верни null."""},
+                    {"role": "user", "content": text}
+                ],
+                options={"temperature": 0}
+            )
         )
-        raw = response.choices[0].message.content.strip()
-        if raw == "null":
+        raw = response["message"]["content"].strip()
+        if "null" in raw.lower():
             return None
-        return datetime.fromisoformat(raw)
-    except Exception:
+        match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", raw)
+        if match:
+            naive_dt = datetime.fromisoformat(match.group())
+            return moscow_tz.localize(naive_dt)
+        return None
+    except Exception as e:
+        print(f"Ошибка parse_time: {e}")
         return None

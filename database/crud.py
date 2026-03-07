@@ -115,6 +115,16 @@ def save_digest(user_id, date, content_json):
         session.commit()
 
 
+def get_all_pending_reminders():
+    """Все незакрытые задачи с remind_at для восстановления после перезапуска"""
+    with Session() as session:
+        return session.query(Entry).filter(
+            Entry.remind_at != None,
+            Entry.is_done == False,
+            Entry.archived_at == None
+        ).all()
+
+
 def update_entry_remind_at(entry_id, remind_at):
     with Session() as session:
         entry = session.get(Entry, entry_id)
