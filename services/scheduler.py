@@ -69,3 +69,35 @@ def cancel_reminder(entry_id: int):
     job_id = f"reminder_{entry_id}"
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
+
+
+# ── ВЕЧЕРНИЕ СВОДКИ ────────────────────────────────────────────────────
+
+def schedule_daily_digests(bot: Bot):
+    """Планируем ежедневные сводки для всех активных пользователей"""
+    from database.crud import get_all_owner_users
+    from apscheduler.triggers.cron import CronTrigger
+
+    users = get_all_owner_users()
+    for user in users:
+        if not user.digest_time:
+            continue
+        try:
+            hour, minute = user.digest_time.split(":")
+            scheduler.add_job(
+                send_digest_job,
+                trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=MOSCOW_TZ),
+                args=[bot, user.user_id, user.first_name],
+                id=f"digest_{user.user_id}",
+                replace_existing=True
+            )
+        except Exception as e:
+            print(f"Ошибка планирования сводки для {user.user_id}: {e}")
+
+    print(f"Сводки запланированы для {len(users)} пользователей")
+
+
+async def send_digest_job(bot: Bot, user_id: int, first_name: str):
+    """Джоб отправки сводки"""
+    from services.digest_service import generate_digest
+    await generate_digest(bot, user_id, first_name)

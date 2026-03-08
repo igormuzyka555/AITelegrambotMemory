@@ -28,18 +28,22 @@ async def cmd_start(message: Message, state: FSMContext):
     # Если уже проходил онбординг
     if user.is_onboarded:
         if user.role == "guest":
-            # Гость возвращается
+            # Гость возвращается — даём выбор
             builder = InlineKeyboardBuilder()
-            builder.button(text="📩 Отправить сообщение", callback_data="guest_send_new")
+            builder.button(text="📩 Отправить сообщение партнёру", callback_data="guest_send_new")
+            builder.button(text="🧠 Переключиться в режим пользователя", callback_data="switch_to_owner")
+            builder.adjust(1)
             await message.answer(
                 f"С возвращением, {user.first_name}! 🤝\n\n"
-                f"Хочешь отправить новое сообщение партнёру?",
+                f"Что хочешь сделать?",
                 reply_markup=builder.as_markup()
             )
         else:
-            # Хозяин возвращается
+            # Хозяин возвращается — даём выбор
             builder = InlineKeyboardBuilder()
             builder.button(text="⏰ Изменить время сводки", callback_data="change_digest_time")
+            builder.button(text="🤝 Переключиться в режим партнёра", callback_data="switch_to_guest")
+            builder.adjust(1)
             await message.answer(
                 f"С возвращением, {user.first_name}! 🧠\n\n"
                 f"Просто говори или пиши — я запомню всё. 🎙️\n"
@@ -122,6 +126,41 @@ async def guest_send_new(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         "Напиши username того кому хочешь передать сообщение\n"
         "(например: @muzyka410):"
+    )
+    await callback.answer()
+
+
+# ── ПЕРЕКЛЮЧЕНИЕ РОЛЕЙ ───────────────────────────────────────────────────
+@router.callback_query(F.data == "switch_to_owner")
+async def switch_to_owner(callback: CallbackQuery, state: FSMContext):
+    from services.scheduler import schedule_trial_ending
+    import main as app
+    user = get_or_create_user(callback.from_user.id)
+    update_user(callback.from_user.id, role="owner")
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🌙 21:00", callback_data="digest_21:00")
+    builder.button(text="🌆 20:00", callback_data="digest_20:00")
+    builder.button(text="🌃 22:00", callback_data="digest_22:00")
+    builder.button(text="✏️ Другое время", callback_data="digest_custom")
+    builder.adjust(2)
+
+    await callback.message.answer(
+        "🧠 Переключился в режим пользователя!\n\n"
+        "Теперь просто говори или пиши — я запомню всё.\n\n"
+        "В какое время присылать вечернюю сводку?",
+        reply_markup=builder.as_markup()
+    )
+    await state.set_state(OnboardingFSM.waiting_for_digest_time)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "switch_to_guest")
+async def switch_to_guest(callback: CallbackQuery, state: FSMContext):
+    update_user(callback.from_user.id, role="guest")
+    await callback.message.answer(
+        "🤝 Переключился в режим партнёра!\n\n"
+        "Напиши /guest чтобы отправить сообщение партнёру."
     )
     await callback.answer()
 
