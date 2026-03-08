@@ -1,23 +1,39 @@
-import whisper
-import ollama
 import json
 import re
-from datetime import datetime, timedelta
+import os
 import asyncio
+from datetime import datetime, timedelta
 import pytz
+from dotenv import load_dotenv
 
-# Загружаем Whisper модель один раз при старте
-_whisper_model = None
+load_dotenv()
+
+# ── Режим работы: local или openai ───────────────────────────────────────
+AI_MODE = os.getenv("AI_MODE", "local").lower()
+print(f"AI режим: {AI_MODE.upper()}")
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
+
+_whisper_model = None
+_openai_client = None
+
 
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
+        import whisper
         print("Загружаю Whisper medium...")
         _whisper_model = whisper.load_model("medium")
         print("Whisper готов!")
     return _whisper_model
+
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        from openai import AsyncOpenAI
+        _openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _openai_client
 
 
 CLASSIFY_PROMPT = """
@@ -65,8 +81,15 @@ CATEGORY_EMOJI = {
 }
 
 
+# ── ТРАНСКРИПЦИЯ ─────────────────────────────────────────────────────────
+
 async def transcribe(audio_path: str) -> str:
-    """Расшифровка голосового через локальный Whisper"""
+    if AI_MODE == "openai":
+        return await _transcribe_openai(audio_path)
+    return await _transcribe_local(audio_path)
+
+
+async def _transcribe_local(audio_path: str) -> str:
     model = get_whisper_model()
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
@@ -76,8 +99,27 @@ async def transcribe(audio_path: str) -> str:
     return result["text"].strip()
 
 
+async def _transcribe_openai(audio_path: str) -> str:
+    client = get_openai_client()
+    with open(audio_path, "rb") as f:
+        result = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            language="ru"
+        )
+    return result.text.strip()
+
+
+# ── КЛАССИФИКАЦИЯ ────────────────────────────────────────────────────────
+
 async def classify(text: str) -> dict:
-    """Классификация текста через локальный Mistral (Ollama)"""
+    if AI_MODE == "openai":
+        return await _classify_openai(text)
+    return await _classify_local(text)
+
+
+async def _classify_local(text: str) -> dict:
+    import ollama
     for attempt in range(3):
         try:
             loop = asyncio.get_event_loop()
@@ -96,19 +138,45 @@ async def classify(text: str) -> dict:
             raw = re.sub(r"```json|```", "", raw).strip()
             return json.loads(raw)
         except Exception as e:
-            print(f"Ошибка classify (попытка {attempt + 1}): {e}")
+            print(f"Ошибка classify local (попытка {attempt + 1}): {e}")
             if attempt == 2:
-                return {
-                    "category": "chaos",
-                    "summary": text[:100],
-                    "remind_at": None,
-                    "has_explicit_time": False,
-                    "source": "owner"
-                }
+                return _fallback(text)
 
+
+async def _classify_openai(text: str) -> dict:
+    client = get_openai_client()
+    for attempt in range(3):
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": CLASSIFY_PROMPT},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0
+            )
+            raw = response.choices[0].message.content.strip()
+            raw = re.sub(r"```json|```", "", raw).strip()
+            return json.loads(raw)
+        except Exception as e:
+            print(f"Ошибка classify openai (попытка {attempt + 1}): {e}")
+            if attempt == 2:
+                return _fallback(text)
+
+
+def _fallback(text: str) -> dict:
+    return {
+        "category": "chaos",
+        "summary": text[:100],
+        "remind_at": None,
+        "has_explicit_time": False,
+        "source": "owner"
+    }
+
+
+# ── ПАРСИНГ ВРЕМЕНИ ───────────────────────────────────────────────────────
 
 async def parse_time(text: str) -> datetime | None:
-    """Парсинг времени — сначала regex, потом Mistral для сложных случаев"""
     now = datetime.now(MOSCOW_TZ)
     t = text.strip().lower()
 
@@ -155,12 +223,19 @@ async def parse_time(text: str) -> datetime | None:
         tomorrow = now + timedelta(days=1)
         return tomorrow.replace(hour=int(m.group(1)), minute=0, second=0, microsecond=0)
 
-    # «завтра» без времени — утром в 9:00
+    # «завтра» без времени
     if "завтра" in t:
         tomorrow = now + timedelta(days=1)
         return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
 
-    # Сложные случаи — отдаём Mistral
+    # Сложные случаи — отдаём AI
+    if AI_MODE == "openai":
+        return await _parse_time_openai(text, now)
+    return await _parse_time_local(text, now)
+
+
+async def _parse_time_local(text: str, now: datetime) -> datetime | None:
+    import ollama
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
@@ -182,9 +257,32 @@ async def parse_time(text: str) -> datetime | None:
             return None
         match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", raw)
         if match:
-            naive_dt = datetime.fromisoformat(match.group())
-            return MOSCOW_TZ.localize(naive_dt)
-        return None
+            return MOSCOW_TZ.localize(datetime.fromisoformat(match.group()))
     except Exception as e:
-        print(f"Ошибка parse_time: {e}")
-        return None
+        print(f"Ошибка parse_time local: {e}")
+    return None
+
+
+async def _parse_time_openai(text: str, now: datetime) -> datetime | None:
+    client = get_openai_client()
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": f"""Сейчас по московскому времени: {now.strftime('%Y-%m-%d %H:%M')} (UTC+3).
+Пользователь написал время в свободной форме.
+Вычисли точное московское время и верни ТОЛЬКО в формате ISO 8601 (например 2026-03-08T23:19:00).
+Ничего кроме даты. Если не можешь — верни null."""},
+                {"role": "user", "content": text}
+            ],
+            temperature=0
+        )
+        raw = response.choices[0].message.content.strip()
+        if "null" in raw.lower():
+            return None
+        match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", raw)
+        if match:
+            return MOSCOW_TZ.localize(datetime.fromisoformat(match.group()))
+    except Exception as e:
+        print(f"Ошибка parse_time openai: {e}")
+    return None
