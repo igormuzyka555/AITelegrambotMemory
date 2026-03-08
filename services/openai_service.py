@@ -2,11 +2,14 @@ import whisper
 import ollama
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
+import pytz
 
 # Загружаем Whisper модель один раз при старте
 _whisper_model = None
+
+MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 def get_whisper_model():
     global _whisper_model
@@ -63,9 +66,8 @@ CATEGORY_EMOJI = {
 
 
 async def transcribe(audio_path: str) -> str:
-    """Расшифровка голосового через локальный Whisper (GPU)"""
+    """Расшифровка голосового через локальный Whisper"""
     model = get_whisper_model()
-    # Запускаем в executor чтобы не блокировать async loop
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None,
@@ -106,14 +108,10 @@ async def classify(text: str) -> dict:
 
 
 async def parse_time(text: str) -> datetime | None:
-    """Парсинг времени — сначала простые паттерны в коде, потом Mistral"""
-    import pytz
-    from datetime import timedelta
-    moscow_tz = pytz.timezone("Europe/Moscow")
-    now = datetime.now(moscow_tz)
+    """Парсинг времени — сначала regex, потом Mistral для сложных случаев"""
+    now = datetime.now(MOSCOW_TZ)
     t = text.strip().lower()
 
-    # ── Простые паттерны считаем сами ──────────────────────────────
     # «через X минут»
     m = re.search(r"через\s+(\d+)\s+мин", t)
     if m:
@@ -124,7 +122,7 @@ async def parse_time(text: str) -> datetime | None:
     if m:
         return now + timedelta(hours=int(m.group(1)))
 
-    # «через X дн» / «через X день» / «через X дней»
+    # «через X дней/день/дня»
     m = re.search(r"через\s+(\d+)\s+д", t)
     if m:
         return now + timedelta(days=int(m.group(1)))
@@ -137,7 +135,7 @@ async def parse_time(text: str) -> datetime | None:
             result += timedelta(days=1)
         return result
 
-    # «в ЧЧ» (без минут)
+    # «в ЧЧ»
     m = re.search(r"в\s+(\d{1,2})($|\s)", t)
     if m:
         result = now.replace(hour=int(m.group(1)), minute=0, second=0, microsecond=0)
@@ -162,7 +160,7 @@ async def parse_time(text: str) -> datetime | None:
         tomorrow = now + timedelta(days=1)
         return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
 
-    # ── Сложные случаи — отдаём Mistral ────────────────────────────
+    # Сложные случаи — отдаём Mistral
     try:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
@@ -185,7 +183,7 @@ async def parse_time(text: str) -> datetime | None:
         match = re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", raw)
         if match:
             naive_dt = datetime.fromisoformat(match.group())
-            return moscow_tz.localize(naive_dt)
+            return MOSCOW_TZ.localize(naive_dt)
         return None
     except Exception as e:
         print(f"Ошибка parse_time: {e}")
