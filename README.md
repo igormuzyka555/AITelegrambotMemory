@@ -17,6 +17,7 @@
 - [Быстрый старт](#быстрый-старт)
 - [Запуск на локальных моделях](#запуск-на-локальных-моделях-whisper--ollama)
 - [Запуск на OpenAI](#запуск-на-openai)
+- [Запуск через Docker](#запуск-через-docker-openai-режим)
 - [Команды бота](#команды-бота)
 - [Веб-аналитика](#веб-аналитика)
 - [Переменные окружения](#переменные-окружения)
@@ -345,6 +346,90 @@ async def classify(text: str) -> dict:
 | Точность | Хорошая | Отличная |
 | Интернет | Не нужен | Обязателен |
 | Приватность | Полная | Данные на серверах OpenAI |
+
+---
+
+---
+
+## Запуск через Docker (OpenAI режим)
+
+Docker — самый простой способ запустить бота для клиентов или на сервере.
+Работает **только с OpenAI режимом** (`AI_MODE=openai`) — контейнер лёгкий (~500MB).
+
+> Локальные модели (Whisper + Ollama) не подходят для Docker — они весят ~8-10GB и требуют GPU.
+
+### Требования
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) или Docker Engine (Linux)
+- OpenAI API ключ
+- Telegram Bot Token
+
+### Шаг 1 — Клонируй репозиторий
+```bash
+git clone https://github.com/ТВО_USERNAME/second-brain-bot.git
+cd second-brain-bot
+```
+
+### Шаг 2 — Создай `.env` из шаблона
+```bash
+cp .env.example .env
+```
+
+Заполни `.env`:
+```env
+AI_MODE=openai
+BOT_TOKEN=токен_от_BotFather
+OPENAI_API_KEY=sk-proj-...
+OWNER_CHAT_ID=твой_telegram_id
+ANALYTICS_PASSWORD=придумай_пароль
+DB_PASSWORD=придумай_пароль_для_бд
+DATABASE_URL=postgresql://postgres:придумай_пароль_для_бд@db:5432/secondbrain
+```
+
+> ⚠️ `DATABASE_URL` должен содержать тот же пароль что и `DB_PASSWORD`, и хост `db` (не localhost).
+
+### Шаг 3 — Запусти
+```bash
+docker-compose up -d
+```
+
+Docker сам поднимет три контейнера:
+- `secondbrain_db` — PostgreSQL база данных
+- `secondbrain_bot` — Telegram бот
+- `secondbrain_analytics` — веб-аналитика на порту 8000
+
+### Шаг 4 — Проверь
+```bash
+# Посмотреть логи бота
+docker logs secondbrain_bot -f
+
+# Посмотреть все контейнеры
+docker ps
+```
+
+Аналитика доступна на **http://localhost:8000**
+
+### Полезные команды Docker
+```bash
+# Остановить всё
+docker-compose down
+
+# Перезапустить после изменений в коде
+docker-compose up -d --build
+
+# Посмотреть логи аналитики
+docker logs secondbrain_analytics -f
+
+# Удалить всё включая базу данных
+docker-compose down -v
+```
+
+### Сравнение способов запуска
+| | Python напрямую | Docker |
+|---|---|---|
+| Сложность | Средняя | Низкая |
+| Требования | Python + PostgreSQL + ffmpeg | Только Docker |
+| AI режим | local или openai | Только openai |
+| Для кого | Разработчик | Клиент / сервер |
 
 ---
 
