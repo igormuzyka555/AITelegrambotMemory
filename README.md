@@ -1,5 +1,7 @@
 # 🧠 Второй Мозг — Telegram Bot v1.0.0
 
+
+
 Персональный AI-ассистент памяти для людей с ADHD и не только.  
 Записывает голосовые и текстовые заметки, классифицирует их, напоминает и присылает вечернюю сводку.
 
@@ -403,6 +405,7 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 |------------|-------------|----------|
 | `BOT_TOKEN` | ✅ | Токен бота от @BotFather |
 | `DATABASE_URL` | ✅ | postgresql://user:pass@host:port/db |
+| `OWNER_CHAT_ID` | ✅ | Твой Telegram ID |
 | `ANALYTICS_PASSWORD` | ✅ | Пароль для дашборда |
 | `OPENAI_API_KEY` | ❌ | Нужен только для режима OpenAI |
 | `PAYMENT_TOKEN` | ❌ | Токен ЮКасса для приёма оплаты |
@@ -434,11 +437,3 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 | Whisper (локально) | openai-whisper |
 | Ollama + Mistral | latest |
 | OpenAI (опционально) | gpt-4o + whisper-1 |
-
----
-
-## Автор
-
-Разработано Игорем (@muzyka410)  
-Версия: **v1.0.0**  
-Дата: Март 2026
