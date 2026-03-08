@@ -1,7 +1,5 @@
 # 🧠 Второй Мозг — Telegram Bot v1.0.0
 
-
-
 Персональный AI-ассистент памяти для людей с ADHD и не только.  
 Записывает голосовые и текстовые заметки, классифицирует их, напоминает и присылает вечернюю сводку.
 
@@ -437,3 +435,100 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 | Whisper (локально) | openai-whisper |
 | Ollama + Mistral | latest |
 | OpenAI (опционально) | gpt-4o + whisper-1 |
+
+---
+
+## 🐳 Запуск через Docker
+
+Самый простой способ запустить бота — через Docker. Не нужно устанавливать Python, PostgreSQL и ffmpeg вручную.
+
+### Что включено
+- `Dockerfile` — контейнер бота (Python + ffmpeg)
+- `Dockerfile.analytics` — контейнер веб-аналитики
+- `docker-compose.yml` — оркестрация: бот + аналитика + PostgreSQL
+- `.env.example` — шаблон переменных окружения
+- `requirements.txt` — все зависимости
+
+### Требования
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac/Linux)
+- OpenAI API ключ
+
+### Шаг 1 — Скачай проект
+```bash
+git clone https://github.com/твой_username/second-brain-bot.git
+cd second-brain-bot
+```
+
+### Шаг 2 — Создай `.env` файл
+```bash
+# Windows
+copy .env.example .env
+
+# Mac/Linux
+cp .env.example .env
+```
+
+Открой `.env` и заполни:
+```env
+BOT_TOKEN=токен_от_BotFather
+OPENAI_API_KEY=sk-proj-...
+OWNER_CHAT_ID=твой_telegram_id
+ANALYTICS_PASSWORD=придумай_пароль
+DB_PASSWORD=придумай_пароль_для_базы
+```
+
+> Свой Telegram ID можно узнать у бота @userinfobot
+
+### Шаг 3 — Запусти
+```bash
+docker-compose up -d
+```
+
+При первом запуске Docker скачает все образы и соберёт контейнеры (~2-5 минут).
+
+### Шаг 4 — Проверь что всё работает
+```bash
+# Статус контейнеров
+docker-compose ps
+
+# Логи бота
+docker-compose logs bot
+
+# Логи аналитики
+docker-compose logs analytics
+```
+
+Веб-аналитика доступна на **http://localhost:8000**
+
+### Полезные команды
+```bash
+# Остановить
+docker-compose down
+
+# Перезапустить бота после изменений в коде
+docker-compose up -d --build bot
+
+# Посмотреть логи в реальном времени
+docker-compose logs -f bot
+
+# Зайти внутрь контейнера
+docker exec -it secondbrain_bot bash
+```
+
+### Структура Docker
+```
+docker-compose.yml
+├── db          ← PostgreSQL 16 (данные хранятся в volume)
+├── bot         ← Telegram бот (Dockerfile)
+└── analytics   ← Веб-дашборд (Dockerfile.analytics) → порт 8000
+```
+
+> ⚠️ Данные базы данных хранятся в Docker volume `postgres_data` и не теряются при перезапуске контейнеров.
+
+---
+
+## Автор
+
+Разработано Игорем (@muzyka410)  
+Версия: **v1.0.0**  
+Дата: Март 2026

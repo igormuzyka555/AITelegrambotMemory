@@ -1,6 +1,9 @@
 # Секреты
 .env
 
+# Docker
+postgres_data/
+
 # Python
 __pycache__/
 *.pyc
