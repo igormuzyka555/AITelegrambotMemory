@@ -437,11 +437,3 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 | Whisper (локально) | openai-whisper |
 | Ollama + Mistral | latest |
 | OpenAI (опционально) | gpt-4o + whisper-1 |
-
----
-
-## Автор
-
-Разработано Игорем (@muzyka410)  
-Версия: **v1.0.0**  
-Дата: Март 2026
