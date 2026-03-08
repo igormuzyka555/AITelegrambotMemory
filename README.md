@@ -205,7 +205,6 @@ CREATE DATABASE secondbrain;
 ```env
 BOT_TOKEN=твой_токен_от_BotFather
 DATABASE_URL=postgresql://postgres:пароль@localhost:5432/secondbrain
-OWNER_CHAT_ID=твой_telegram_id
 ANALYTICS_PASSWORD=твой_пароль_для_дашборда
 OPENAI_API_KEY=           # оставь пустым если используешь локальные модели
 PAYMENT_TOKEN=            # токен ЮКасса (опционально)
