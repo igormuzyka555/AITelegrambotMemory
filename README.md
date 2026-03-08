@@ -1,7 +1,5 @@
 # 🧠 Второй Мозг — Telegram Bot v1.0.0
 
-
-
 Персональный AI-ассистент памяти для людей с ADHD и не только.  
 Записывает голосовые и текстовые заметки, классифицирует их, напоминает и присылает вечернюю сводку.
 
@@ -16,9 +14,12 @@
 - [Требования](#требования)
 - [Быстрый старт](#быстрый-старт)
 - [Запуск на локальных моделях](#запуск-на-локальных-моделях-whisper--ollama)
+- [Запуск на OpenAI](#запуск-на-openai)
 - [Команды бота](#команды-бота)
 - [Веб-аналитика](#веб-аналитика)
 - [Переменные окружения](#переменные-окружения)
+- [Монетизация](#монетизация)
+
 ---
 
 ## Что умеет бот
@@ -205,6 +206,7 @@ CREATE DATABASE secondbrain;
 ```env
 BOT_TOKEN=твой_токен_от_BotFather
 DATABASE_URL=postgresql://postgres:пароль@localhost:5432/secondbrain
+OWNER_CHAT_ID=твой_telegram_id
 ANALYTICS_PASSWORD=твой_пароль_для_дашборда
 OPENAI_API_KEY=           # оставь пустым если используешь локальные модели
 PAYMENT_TOKEN=            # токен ЮКасса (опционально)
@@ -287,6 +289,74 @@ async def classify(text):
 | RTX 3060 6GB | ~2-5 сек | ~2-3 сек |
 | RTX 4050 6GB | ~2-4 сек | ~2-3 сек |
 | RTX 4090 | <1 сек | <1 сек |
+
+> ⚠️ Предупреждение `FP16 is not supported on CPU` — это нормально, Whisper работает на CPU в режиме FP32.
+
+---
+
+## Запуск на OpenAI
+
+Если хочешь использовать GPT-4o и Whisper API вместо локальных моделей — замени содержимое `services/openai_service.py`:
+
+### Шаг 1 — Добавь API ключ в `.env`
+```env
+OPENAI_API_KEY=sk-proj-...твой_ключ...
+```
+
+### Шаг 2 — Замени `services/openai_service.py`
+
+```python
+from openai import AsyncOpenAI
+from datetime import datetime
+import json, re, pytz
+
+client = AsyncOpenAI()
+
+CLASSIFY_PROMPT = """..."""  # оставь тот же промпт
+
+CATEGORY_EMOJI = { ... }  # оставь тот же словарь
+
+async def transcribe(audio_path: str) -> str:
+    with open(audio_path, "rb") as f:
+        result = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            language="ru"
+        )
+    return result.text
+
+async def classify(text: str) -> dict:
+    for attempt in range(3):
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": CLASSIFY_PROMPT},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0
+            )
+            raw = response.choices[0].message.content.strip()
+            raw = re.sub(r"```json|```", "", raw).strip()
+            return json.loads(raw)
+        except Exception as e:
+            print(f"Ошибка classify (попытка {attempt+1}): {e}")
+            if attempt == 2:
+                return {"category": "chaos", "summary": text[:100],
+                        "remind_at": None, "has_explicit_time": False, "source": "owner"}
+
+# parse_time оставь как есть — regex парсер надёжнее любой модели
+```
+
+### Сравнение режимов
+| | Локальные модели | OpenAI |
+|---|---|---|
+| Стоимость | Бесплатно | ~$0.01-0.05 за сообщение |
+| Скорость | 5-30 сек | 1-3 сек |
+| Точность | Хорошая | Отличная |
+| Интернет | Не нужен | Обязателен |
+| Приватность | Полная | Данные на серверах OpenAI |
+
 ---
 
 ## Команды бота
@@ -333,11 +403,23 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 |------------|-------------|----------|
 | `BOT_TOKEN` | ✅ | Токен бота от @BotFather |
 | `DATABASE_URL` | ✅ | postgresql://user:pass@host:port/db |
-| `OWNER_CHAT_ID` | ✅ | Твой Telegram ID |
 | `ANALYTICS_PASSWORD` | ✅ | Пароль для дашборда |
 | `OPENAI_API_KEY` | ❌ | Нужен только для режима OpenAI |
 | `PAYMENT_TOKEN` | ❌ | Токен ЮКасса для приёма оплаты |
 | `WEBHOOK_URL` | ❌ | URL для деплоя на сервер |
+
+---
+
+## Монетизация
+
+- Триал: **7 дней бесплатно**
+- Подписка: **299 ₽/месяц**
+- Платёжная система: ЮКасса (настраивается через `PAYMENT_TOKEN`)
+- При оплате владельцу приходит уведомление в Telegram
+
+> ⚠️ Middleware проверки подписки (`bot/middlewares/subscription.py`) в v1.0.0 временно отключена для тестирования. Перед продакшеном раскомментируй логику проверки.
+
+---
 
 ## Технологии
 
@@ -352,3 +434,11 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 | Whisper (локально) | openai-whisper |
 | Ollama + Mistral | latest |
 | OpenAI (опционально) | gpt-4o + whisper-1 |
+
+---
+
+## Автор
+
+Разработано Игорем (@muzyka410)  
+Версия: **v1.0.0**  
+Дата: Март 2026
