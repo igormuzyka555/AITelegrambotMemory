@@ -35,7 +35,8 @@ async def ask_when_to_remind(message: Message, summary: str, entry_id: int):
 
 @router.message(F.text & ~F.text.startswith("/"), StateFilter(None))
 async def handle_text(message: Message, state: FSMContext):
-    if message.text.lower().startswith("передаю сообщение для"):
+    t = message.text.lower()
+    if t.startswith("передаю сообщение для") or t.startswith("передаю сообщения для") or t.startswith("передай сообщение для"):
         return
 
     await message.answer("Записываю... 🧠")
@@ -126,7 +127,9 @@ async def handle_reminder_choice(callback: CallbackQuery, state: FSMContext):
     entry_id = int(parts[-1])
     choice = "_".join(parts[1:-1])
 
-    now = datetime.utcnow()
+    import pytz
+    moscow_tz = pytz.timezone("Europe/Moscow")
+    now = datetime.now(moscow_tz)
 
     if choice == "30m":
         remind_at = now + timedelta(minutes=30)

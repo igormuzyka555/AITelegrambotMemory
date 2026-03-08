@@ -31,11 +31,19 @@ async def send_reminder(bot: Bot, entry_id: int, user_id: int):
 
     builder.adjust(2)
 
-    text = (
-        f"⏰ Напоминание!\n\n"
-        f"📌 {entry.summary}\n\n"
-        f"Напоминаю {entry.remind_count}-й раз"
-    )
+    # Формируем текст напоминания
+    if entry.source == "guest" and entry.guest_name:
+        text = (
+            f"📩 Сообщение от {entry.guest_name}:\n\n"
+            f"📌 {entry.summary}\n\n"
+            f"Напоминаю {entry.remind_count}-й раз"
+        )
+    else:
+        text = (
+            f"⏰ Напоминание!\n\n"
+            f"📌 {entry.summary}\n\n"
+            f"Напоминаю {entry.remind_count}-й раз"
+        )
 
     await bot.send_message(
         user_id,
