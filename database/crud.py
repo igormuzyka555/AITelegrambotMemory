@@ -22,7 +22,7 @@ def get_or_create_user(user_id, username=None, first_name=None):
         if not user:
             user = User(
                 user_id=user_id,
-                username=username,
+                username=username.lower() if username else None,
                 first_name=first_name,
                 trial_start=datetime.utcnow()
             )
@@ -31,7 +31,7 @@ def get_or_create_user(user_id, username=None, first_name=None):
         else:
             # Всегда обновляем данные из Telegram
             if username:
-                user.username = username
+                user.username = username.lower()
             if first_name:
                 user.first_name = first_name
             session.commit()
@@ -113,6 +113,14 @@ def save_digest(user_id, date, content_json):
         digest = Digest(user_id=user_id, date=date, content_json=content_json)
         session.add(digest)
         session.commit()
+
+
+def get_user_by_username(username: str):
+    """Найти пользователя по username"""
+    with Session() as session:
+        return session.query(User).filter(
+            User.username == username.lower().lstrip("@")
+        ).first()
 
 
 def get_all_pending_reminders():

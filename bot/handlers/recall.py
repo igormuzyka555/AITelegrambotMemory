@@ -10,7 +10,9 @@ router = Router()
 # ── СДЕЛАЛ ✓ ──────────────────────────────────────────
 @router.callback_query(F.data.startswith("done_"))
 async def handle_done(callback: CallbackQuery):
+    import main as app
     entry_id = int(callback.data.split("_")[1])
+    entry = get_entry(entry_id)
 
     # Отменяем все будущие напоминания
     cancel_reminder(entry_id)
@@ -21,6 +23,18 @@ async def handle_done(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("✅ Зафиксировал! Молодец 💪")
     await callback.answer()
+
+    # Если задача была от гостя — уведомляем его
+    if entry and entry.source == "guest" and entry.guest_telegram_id:
+        owner = callback.from_user
+        try:
+            await app.bot.send_message(
+                entry.guest_telegram_id,
+                f"✅ {owner.first_name} выполнил твою задачу:\n\n"
+                f"«{entry.summary}»"
+            )
+        except Exception as e:
+            print(f"Не удалось уведомить гостя: {e}")
 
 
 # ── ПОЗЖЕ — ЧЕРЕЗ ЧАС ─────────────────────────────────

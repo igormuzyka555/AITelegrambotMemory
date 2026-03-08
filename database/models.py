@@ -15,7 +15,8 @@ class User(Base):
     first_name = Column(String, nullable=True)
     timezone = Column(String, default="Europe/Moscow")
     digest_time = Column(String, default="21:00")
-    is_onboarded = Column(Boolean, default=False)  # ← новое поле
+    is_onboarded = Column(Boolean, default=False)
+    role = Column(String, default="owner")  # owner | guest
     is_subscribed = Column(Boolean, default=False)
     trial_start = Column(DateTime, default=datetime.utcnow)
     subscription_end = Column(DateTime, nullable=True)
@@ -30,6 +31,7 @@ class Entry(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     source = Column(String, default="owner")  # owner | guest
     guest_name = Column(String, nullable=True)
+    guest_telegram_id = Column(BigInteger, nullable=True)  # ID гостя для уведомления
     raw_text = Column(Text, nullable=True)
     transcription = Column(Text, nullable=True)
     category = Column(String, nullable=True)

@@ -52,8 +52,9 @@ async def main():
     dp.callback_query.middleware(SubscriptionMiddleware())
 
     # Подключаем роутеры
-    from bot.handlers import onboarding, capture, recall
+    from bot.handlers import onboarding, guest, capture, recall
     dp.include_router(onboarding.router)
+    dp.include_router(guest.router)
     dp.include_router(capture.router)
     dp.include_router(recall.router)
 
