@@ -208,7 +208,6 @@ CREATE DATABASE secondbrain;
 ```env
 BOT_TOKEN=твой_токен_от_BotFather
 DATABASE_URL=postgresql://postgres:пароль@localhost:5432/secondbrain
-OWNER_CHAT_ID=твой_telegram_id
 ANALYTICS_PASSWORD=твой_пароль_для_дашборда
 OPENAI_API_KEY=           # оставь пустым если используешь локальные модели
 PAYMENT_TOKEN=            # токен ЮКасса (опционально)
@@ -283,18 +282,6 @@ async def classify(text):
     response = ollama.chat(model="mistral", messages=[...])
     ...
 ```
-
-### Производительность на разных конфигурациях
-| Железо | Whisper | Классификация |
-|--------|---------|---------------|
-| CPU только | ~15-30 сек на сообщение | ~5-10 сек |
-| RTX 3060 6GB | ~2-5 сек | ~2-3 сек |
-| RTX 4050 6GB | ~2-4 сек | ~2-3 сек |
-| RTX 4090 | <1 сек | <1 сек |
-
-> ⚠️ Предупреждение `FP16 is not supported on CPU` — это нормально, Whisper работает на CPU в режиме FP32.
-
----
 
 ## Запуск на OpenAI
 
@@ -405,7 +392,6 @@ python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 |------------|-------------|----------|
 | `BOT_TOKEN` | ✅ | Токен бота от @BotFather |
 | `DATABASE_URL` | ✅ | postgresql://user:pass@host:port/db |
-| `OWNER_CHAT_ID` | ✅ | Твой Telegram ID |
 | `ANALYTICS_PASSWORD` | ✅ | Пароль для дашборда |
 | `OPENAI_API_KEY` | ❌ | Нужен только для режима OpenAI |
 | `PAYMENT_TOKEN` | ❌ | Токен ЮКасса для приёма оплаты |
