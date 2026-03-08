@@ -115,6 +115,15 @@ def save_digest(user_id, date, content_json):
         session.commit()
 
 
+def get_all_owner_users():
+    """Все активные пользователи с ролью owner для рассылки сводок"""
+    with Session() as session:
+        return session.query(User).filter(
+            User.is_onboarded == True,
+            User.role == "owner"
+        ).all()
+
+
 def get_user_by_username(username: str):
     """Найти пользователя по username"""
     with Session() as session:

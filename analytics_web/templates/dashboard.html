@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Второй Мозг — Дашборд</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f0f1a;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 24px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+        }
+        header h1 { font-size: 24px; color: #fff; }
+        header span { color: #666; font-size: 13px; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .card .label { color: #888; font-size: 12px; text-transform: uppercase; margin-bottom: 8px; }
+        .card .value { font-size: 32px; font-weight: 700; color: #fff; }
+        .card .sub { color: #666; font-size: 12px; margin-top: 4px; }
+        .card.green .value { color: #4ade80; }
+        .card.purple .value { color: #a78bfa; }
+        .card.orange .value { color: #fb923c; }
+        .card.red .value { color: #f87171; }
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .chart-box {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .chart-box h3 { font-size: 14px; color: #aaa; margin-bottom: 16px; }
+        .table-box {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .table-box h3 { font-size: 16px; color: #fff; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; color: #666; font-size: 12px; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid #2a2a4a; }
+        td { padding: 10px 12px; border-bottom: 1px solid #1e1e35; font-size: 14px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #1e1e35; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge.paid { background: #14532d; color: #4ade80; }
+        .badge.trial { background: #1e3a5f; color: #60a5fa; }
+        @media (max-width: 768px) {
+            .charts { grid-template-columns: 1fr; }
+            .grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🧠 Второй Мозг — Аналитика</h1>
+    <span>Обновлено: {{ m.generated_at }}</span>
+</header>
+
+<!-- Метрики -->
+<div class="grid">
+    <div class="card purple">
+        <div class="label">Пользователей</div>
+        <div class="value">{{ m.total_users }}</div>
+        <div class="sub">Активных за 7 дней: {{ m.active_7d }}</div>
+    </div>
+    <div class="card green">
+        <div class="label">Платящих</div>
+        <div class="value">{{ m.paying_users }}</div>
+        <div class="sub">Конверсия: {{ m.conversion }}%</div>
+    </div>
+    <div class="card">
+        <div class="label">Всего записей</div>
+        <div class="value">{{ m.total_entries }}</div>
+        <div class="sub">Гостевых: {{ m.guest_entries }}</div>
+    </div>
+    <div class="card green">
+        <div class="label">Задач выполнено</div>
+        <div class="value">{{ m.done_tasks }}</div>
+        <div class="sub">{{ m.done_pct }}% от всех задач</div>
+    </div>
+    <div class="card orange">
+        <div class="label">Незакрытых задач</div>
+        <div class="value">{{ m.open_tasks }}</div>
+        <div class="sub">Зомби (3+ напоминания): {{ m.zombie_tasks }}</div>
+    </div>
+</div>
+
+<!-- Графики -->
+<div class="charts">
+    <div class="chart-box">
+        <h3>📊 Категории записей</h3>
+        <canvas id="catChart"></canvas>
+    </div>
+    <div class="chart-box">
+        <h3>📅 Новые пользователи (14 дней)</h3>
+        <canvas id="usersChart"></canvas>
+    </div>
+    <div class="chart-box">
+        <h3>✍️ Записи по дням (14 дней)</h3>
+        <canvas id="entriesChart"></canvas>
+    </div>
+</div>
+
+<!-- Таблица пользователей -->
+<div class="table-box">
+    <h3>👥 Пользователи</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Username</th>
+                <th>Статус</th>
+                <th>Записей</th>
+                <th>Регистрация</th>
+                <th>Триал с</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in m.users %}
+            <tr>
+                <td>{{ u.first_name }}</td>
+                <td>@{{ u.username }}</td>
+                <td>
+                    {% if u.is_subscribed %}
+                        <span class="badge paid">💚 Платный</span>
+                    {% else %}
+                        <span class="badge trial">🔵 Триал</span>
+                    {% endif %}
+                </td>
+                <td>{{ u.entries_count }}</td>
+                <td>{{ u.created_at }}</td>
+                <td>{{ u.trial_start }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+const chartDefaults = {
+    plugins: { legend: { display: false } },
+    scales: {
+        x: { ticks: { color: '#666', font: { size: 10 } }, grid: { color: '#1e1e35' } },
+        y: { ticks: { color: '#666', font: { size: 10 } }, grid: { color: '#1e1e35' } }
+    }
+};
+
+// Категории
+const catData = {{ m.categories | tojson }};
+new Chart(document.getElementById('catChart'), {
+    type: 'bar',
+    data: {
+        labels: catData.map(c => c.name),
+        datasets: [{
+            data: catData.map(c => c.count),
+            backgroundColor: '#7c6aff88',
+            borderColor: '#7c6aff',
+            borderWidth: 1,
+            borderRadius: 4
+        }]
+    },
+    options: chartDefaults
+});
+
+// Новые пользователи
+const usersData = {{ m.new_users | tojson }};
+new Chart(document.getElementById('usersChart'), {
+    type: 'bar',
+    data: {
+        labels: usersData.map(d => d.day.slice(5)),
+        datasets: [{
+            data: usersData.map(d => d.count),
+            backgroundColor: '#4ade8088',
+            borderColor: '#4ade80',
+            borderWidth: 1,
+            borderRadius: 4
+        }]
+    },
+    options: chartDefaults
+});
+
+// Записи по дням
+const entriesData = {{ m.entries_by_day | tojson }};
+new Chart(document.getElementById('entriesChart'), {
+    type: 'line',
+    data: {
+        labels: entriesData.map(d => d.day.slice(5)),
+        datasets: [{
+            data: entriesData.map(d => d.count),
+            borderColor: '#fb923c',
+            backgroundColor: '#fb923c22',
+            tension: 0.4,
+            fill: true,
+            pointRadius: 3
+        }]
+    },
+    options: chartDefaults
+});
+</script>
+
+</body>
+</html>
