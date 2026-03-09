@@ -1,76 +1,75 @@
-# 🧠 Второй Мозг — Telegram Bot v1.0.0
+# Второй Мозг — Telegram Bot
 
+**Версия:** v1.0.0  
+**Стек:** Python 3.11 · aiogram 3 · PostgreSQL · APScheduler · FastAPI · Whisper · Ollama / OpenAI
 
-
-Персональный AI-ассистент памяти для людей с ADHD и не только.  
-Записывает голосовые и текстовые заметки, классифицирует их, напоминает и присылает вечернюю сводку.
+Персональный AI-ассистент для захвата, классификации и напоминания о задачах, идеях и заметках. Поддерживает голосовой и текстовый ввод, режим совместного использования (гостевой доступ) и ежедневную сводку.
 
 ---
 
-## 📋 Содержание
+## Содержание
 
-- [Что умеет бот](#что-умеет-бот)
+- [Функциональность](#функциональность)
 - [Архитектура](#архитектура)
 - [Структура проекта](#структура-проекта)
 - [База данных](#база-данных)
 - [Требования](#требования)
-- [Быстрый старт](#быстрый-старт)
-- [Запуск на локальных моделях](#запуск-на-локальных-моделях-whisper--ollama)
-- [Запуск на OpenAI](#запуск-на-openai)
-- [Запуск через Docker](#запуск-через-docker-openai-режим)
+- [Установка и запуск](#установка-и-запуск)
+- [Режим локальных моделей](#режим-локальных-моделей-whisper--ollama)
+- [Режим OpenAI](#режим-openai)
+- [Развёртывание через Docker](#развёртывание-через-docker)
 - [Команды бота](#команды-бота)
 - [Веб-аналитика](#веб-аналитика)
 - [Переменные окружения](#переменные-окружения)
 - [Монетизация](#монетизация)
+- [Технологии](#технологии)
 
 ---
 
-## Что умеет бот
+## Функциональность
 
-### 🎙️ Захват записей
-- Принимает **голосовые сообщения** — расшифровывает через Whisper
-- Принимает **текстовые сообщения** — любой формат, свободный текст
-- Автоматически классифицирует по 8 категориям через AI
+### Захват записей
+- Приём голосовых сообщений с автоматической транскрипцией через Whisper
+- Приём текстовых сообщений в свободной форме
+- Классификация по 8 категориям с использованием языковой модели
 
-### 📌 8 категорий записей
-| Категория | Эмодзи | Описание |
-|-----------|--------|----------|
-| task | ✅ | Задача — что-то нужно сделать |
-| idea | 💡 | Идея, мысль, концепция |
-| note | 📝 | Заметка, факт, наблюдение |
-| state | 😌 | Настроение, самочувствие |
-| goal | 🎯 | Цель на будущее |
-| repeat | 🔁 | Регулярная задача |
-| question | ❓ | Вопрос, нужно выяснить |
-| chaos | 🌀 | Непонятно что |
+### Категории записей
 
-### ⏰ Умные напоминания
-- При записи задачи бот спрашивает когда напомнить
-- Кнопки: 30 минут / 1 час / 2 часа / Вечером / Завтра утром / Своё время
-- Своё время парсится через regex + Mistral (локально) или GPT (OpenAI)
-- Если задача не выполнена — напоминает каждый день
-- С 7-го напоминания появляется кнопка «Архивировать»
+| Категория | Описание |
+|-----------|----------|
+| `task` ✅ | Задача — действие, которое необходимо выполнить |
+| `idea` 💡 | Идея, концепция, новая мысль |
+| `note` 📝 | Наблюдение, факт, информация на память |
+| `state` 😌 | Эмоциональное состояние, самочувствие |
+| `goal` 🎯 | Долгосрочная цель |
+| `repeat` 🔁 | Регулярная, повторяющаяся задача |
+| `question` ❓ | Вопрос, требующий уточнения или исследования |
+| `chaos` 🌀 | Неклассифицированная запись |
 
-### 🤝 Режим гостя (партнёра)
-- Любой человек может открыть бота и отправить задачу владельцу
-- При `/start` выбор роли: Пользователь или Партнёр
-- Партнёр пишет `/guest` → указывает username владельца → пишет сообщение и комментарий → выбирает время
-- Когда владелец выполняет задачу — партнёру приходит уведомление
+### Напоминания
+- Настройка времени напоминания при создании задачи (кнопки или произвольный ввод)
+- Автоматическое повторение напоминания каждые 24 часа до отметки о выполнении
+- Возможность архивации задачи начиная с 7-го напоминания
 
-### 🌙 Вечерняя сводка
-- Каждый день в выбранное время приходит сводка дня
-- Блоки: сделано / незакрытые / идеи / заметки / состояние / от других
-- Кнопки [✅ Сделал] прямо в сводке для незакрытых задач
-- Если записей нет — «Сегодня тишина. Завтра новый день.»
+### Гостевой режим
+- Пользователи с ролью «партнёр» могут отправлять задачи владельцу через команду `/guest`
+- Указывается `@username` получателя, текст сообщения, комментарий и желаемое время напоминания
+- При выполнении задачи владельцем партнёру направляется уведомление
 
-### 📊 Команды просмотра
-- `/tasks` — все незакрытые задачи с кнопками
-- `/today` — записи за сегодня по категориям
-- `/ideas` — идеи за 7 дней
-- `/notes` — заметки за 7 дней с полным текстом
-- `/week` — статистика за неделю
-- `/memory` — всё что бот знает о тебе за 30 дней
-- `/digest` — вечерняя сводка вручную
+### Вечерняя сводка
+- Автоматическая отправка сводки в настроенное пользователем время
+- Структура: выполненные задачи / незакрытые задачи / идеи / заметки / состояние / сообщения от партнёров
+- Кнопки быстрого закрытия задач непосредственно в сводке
+- При отсутствии записей за день отправляется заглушка
+
+### Команды просмотра
+- `/tasks` — активные незакрытые задачи
+- `/today` — все записи текущего дня, сгруппированные по категориям
+- `/ideas` — идеи за последние 7 дней
+- `/notes` — заметки за последние 7 дней с полным содержимым
+- `/week` — статистика за 7 дней по категориям
+- `/memory` — все записи за последние 30 дней
+- `/digest` — ручной вызов вечерней сводки
 
 ---
 
@@ -78,58 +77,66 @@
 
 ```
 Telegram ←→ aiogram 3 ←→ Handlers
-                              ↓
+                              │
                          Services
-                    ┌─────────────────┐
-                    │  openai_service  │  ← Whisper + Mistral (или OpenAI)
-                    │  scheduler       │  ← APScheduler
-                    │  reminder_service│  ← Логика напоминаний
-                    │  digest_service  │  ← Генерация сводки
-                    └─────────────────┘
-                              ↓
+                    ┌─────────────────────┐
+                    │  openai_service      │  ← Транскрипция + классификация
+                    │  scheduler           │  ← APScheduler (напоминания, сводки)
+                    │  reminder_service    │  ← Логика доставки напоминаний
+                    │  digest_service      │  ← Генерация вечерней сводки
+                    └─────────────────────┘
+                              │
                          PostgreSQL
-                              ↓
+                              │
                     analytics_web (FastAPI)
 ```
+
+Режим AI определяется переменной `AI_MODE` в `.env`:
+- `local` — Whisper (локально) + Mistral через Ollama
+- `openai` — Whisper API + GPT-4o через OpenAI API
 
 ---
 
 ## Структура проекта
 
 ```
-Telegram/
-├── main.py                          # Точка входа, запуск бота
-├── .env                             # Секреты (не в git)
-├── .gitignore
+.
+├── main.py                          # Точка входа
+├── .env                             # Конфигурация (не включается в VCS)
+├── .env.example                     # Шаблон конфигурации
+├── requirements.txt
+├── Dockerfile
+├── Dockerfile.analytics
+├── docker-compose.yml
 │
 ├── bot/
 │   ├── handlers/
 │   │   ├── onboarding.py            # /start, выбор роли, онбординг
-│   │   ├── capture.py               # Захват текста и голоса
-│   │   ├── recall.py                # Кнопки: Сделал / Снуз / Архив
-│   │   ├── guest.py                 # Режим партнёра (/guest)
-│   │   ├── digest.py                # /digest команда
-│   │   └── views.py                 # /tasks /today /ideas /notes /week /memory
+│   │   ├── capture.py               # Обработка входящих сообщений
+│   │   ├── recall.py                # Обработка кнопок: выполнено / снуз / архив
+│   │   ├── guest.py                 # Гостевой режим (/guest)
+│   │   ├── digest.py                # Команда /digest
+│   │   └── views.py                 # Команды просмотра
 │   ├── middlewares/
-│   │   └── subscription.py          # Проверка подписки (временно отключена)
+│   │   └── subscription.py          # Middleware проверки подписки
 │   └── keyboards/
 │       └── inline.py
 │
 ├── database/
-│   ├── models.py                    # SQLAlchemy модели: User, Entry, Digest, Analytics
-│   └── crud.py                      # Все операции с БД
+│   ├── models.py                    # Модели SQLAlchemy
+│   └── crud.py                      # Операции с базой данных
 │
 ├── services/
-│   ├── openai_service.py            # AI: транскрипция + классификация + парсинг времени
-│   ├── scheduler.py                 # APScheduler: напоминания + сводки
-│   ├── reminder_service.py          # Логика отправки напоминаний
-│   └── digest_service.py            # Генерация вечерней сводки
+│   ├── openai_service.py            # AI-сервис (dual-mode: local / openai)
+│   ├── scheduler.py                 # Планировщик задач
+│   ├── reminder_service.py          # Сервис напоминаний
+│   └── digest_service.py            # Сервис вечерней сводки
 │
 └── analytics_web/
-    ├── main.py                      # FastAPI дашборд аналитики
+    ├── main.py                      # FastAPI приложение
     └── templates/
-        ├── login.html               # Страница входа
-        └── dashboard.html           # Дашборд с графиками
+        ├── login.html
+        └── dashboard.html
 ```
 
 ---
@@ -137,299 +144,244 @@ Telegram/
 ## База данных
 
 ### Таблица `users`
+
 | Поле | Тип | Описание |
 |------|-----|----------|
-| user_id | BIGINT PK | Telegram ID |
-| username | VARCHAR | @username (lowercase) |
-| first_name | VARCHAR | Имя из Telegram |
-| role | VARCHAR | owner / guest |
-| digest_time | VARCHAR | Время сводки (HH:MM) |
-| is_onboarded | BOOLEAN | Прошёл онбординг |
-| is_subscribed | BOOLEAN | Активная подписка |
-| trial_start | DATETIME | Начало триала |
-| subscription_end | DATETIME | Конец подписки |
+| `user_id` | BIGINT PK | Telegram ID пользователя |
+| `username` | VARCHAR | @username в нижнем регистре |
+| `first_name` | VARCHAR | Имя из профиля Telegram |
+| `role` | VARCHAR | `owner` или `guest` |
+| `digest_time` | VARCHAR | Время сводки в формате HH:MM |
+| `is_onboarded` | BOOLEAN | Признак завершения онбординга |
+| `is_subscribed` | BOOLEAN | Наличие активной подписки |
+| `trial_start` | DATETIME | Дата начала пробного периода |
+| `subscription_end` | DATETIME | Дата окончания подписки |
 
 ### Таблица `entries`
+
 | Поле | Тип | Описание |
 |------|-----|----------|
-| id | INT PK | Автоинкремент |
-| user_id | BIGINT | Владелец записи |
-| source | VARCHAR | owner / guest |
-| guest_name | VARCHAR | Имя гостя |
-| guest_telegram_id | BIGINT | ID гостя для уведомления |
-| raw_text | TEXT | Оригинальный текст |
-| transcription | TEXT | Расшифровка голоса |
-| category | VARCHAR | Категория (8 штук) |
-| summary | TEXT | Краткое описание от AI |
-| remind_at | DATETIME | Время напоминания |
-| remind_count | INT | Счётчик напоминаний |
-| is_done | BOOLEAN | Выполнена |
-| archived_at | DATETIME | Дата архивации |
+| `id` | INT PK | Идентификатор записи |
+| `user_id` | BIGINT FK | Владелец записи |
+| `source` | VARCHAR | `owner` или `guest` |
+| `guest_name` | VARCHAR | Имя отправителя (для гостевых записей) |
+| `guest_telegram_id` | BIGINT | Telegram ID гостя для обратного уведомления |
+| `raw_text` | TEXT | Исходный текст сообщения |
+| `transcription` | TEXT | Расшифровка голосового сообщения |
+| `category` | VARCHAR | Категория записи |
+| `summary` | TEXT | Краткое описание, сформированное моделью |
+| `remind_at` | DATETIME | Запланированное время напоминания |
+| `remind_count` | INT | Количество отправленных напоминаний |
+| `is_done` | BOOLEAN | Признак выполнения |
+| `archived_at` | DATETIME | Дата архивации |
 
 ---
 
 ## Требования
 
+**Общие:**
 - Python 3.10+
 - PostgreSQL 14+
-- ffmpeg (для обработки голосовых)
+- ffmpeg
 
-### Для локальных моделей (без OpenAI):
-- RAM: минимум 8GB (рекомендуется 16GB)
-- GPU: опционально (RTX 3060+ для ускорения Whisper)
-- Ollama
-- Whisper medium (~1.5GB)
-- Mistral через Ollama (~4.7GB)
+**Для режима локальных моделей:**
+- ОЗУ: от 8 ГБ (рекомендуется 16 ГБ)
+- GPU: опционально (ускоряет обработку Whisper)
+- Ollama с установленной моделью Mistral (~4.7 ГБ)
+- Модель Whisper medium (~1.5 ГБ, загружается автоматически)
 
-### Для OpenAI:
-- API ключ OpenAI с балансом
-- Модели: gpt-4o + whisper-1
+**Для режима OpenAI:**
+- API-ключ OpenAI с доступом к моделям `gpt-4o` и `whisper-1`
 
 ---
 
-## Быстрый старт
+## Установка и запуск
 
-### 1. Клонируй репозиторий
+### 1. Клонирование репозитория
 ```bash
-git clone https://github.com/ТВО_USERNAME/second-brain-bot.git
+git clone https://github.com/USERNAME/second-brain-bot.git
 cd second-brain-bot
 ```
 
-### 2. Установи зависимости
+### 2. Установка зависимостей
 ```bash
-python -m pip install aiogram apscheduler sqlalchemy psycopg2-binary python-dotenv pytz fastapi uvicorn jinja2 httpx
+python -m pip install -r requirements.txt
 ```
 
-### 3. Создай базу данных PostgreSQL
+### 3. Создание базы данных
 ```sql
 CREATE DATABASE secondbrain;
 ```
 
-### 4. Создай `.env` файл
-```env
-BOT_TOKEN=твой_токен_от_BotFather
-DATABASE_URL=postgresql://postgres:пароль@localhost:5432/secondbrain
-ANALYTICS_PASSWORD=твой_пароль_для_дашборда
-OPENAI_API_KEY=           # оставь пустым если используешь локальные модели
-PAYMENT_TOKEN=            # токен ЮКасса (опционально)
-WEBHOOK_URL=              # для деплоя (опционально)
+### 4. Настройка окружения
+```bash
+cp .env.example .env
 ```
 
-### 5. Установи ffmpeg
+Заполните `.env` в соответствии с описанием в разделе [Переменные окружения](#переменные-окружения).
+
+### 5. Установка ffmpeg
+
 **Windows:**
 ```bash
 winget install --id Gyan.FFmpeg
 ```
-Перезапусти терминал после установки.
+После установки перезапустите терминал.
 
-**Linux/Mac:**
+**Ubuntu / Debian:**
 ```bash
-sudo apt install ffmpeg      # Ubuntu/Debian
-brew install ffmpeg          # macOS
+sudo apt install ffmpeg
 ```
 
-### 6. Запусти бота
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+### 6. Запуск
 ```bash
 python main.py
 ```
 
 ---
 
-## Запуск на локальных моделях (Whisper + Ollama)
+## Режим локальных моделей (Whisper + Ollama)
 
-Этот режим работает **без интернета и без OpenAI API**. Весь AI запускается на твоём компьютере.
+В данном режиме весь AI-стек работает локально, без обращения к внешним API.
 
-### Шаг 1 — Установи Whisper
+Установите переменную окружения:
+```env
+AI_MODE=local
+```
+
+### Установка Whisper
 ```bash
 python -m pip install openai-whisper
 ```
 
-При первом запуске бот автоматически скачает модель `medium` (~1.5GB).  
-Для слабых компьютеров можно использовать модель `small` — измени в `services/openai_service.py`:
+Модель загружается автоматически при первом запуске. Размер модели можно изменить в `services/openai_service.py`:
+
 ```python
-_whisper_model = whisper.load_model("small")   # быстрее, менее точно
-_whisper_model = whisper.load_model("medium")  # баланс (по умолчанию)
-_whisper_model = whisper.load_model("large")   # точнее, нужно 16GB RAM
+_whisper_model = whisper.load_model("small")    # быстрее, точность ниже
+_whisper_model = whisper.load_model("medium")   # оптимальный баланс (по умолчанию)
+_whisper_model = whisper.load_model("large")    # максимальная точность, требует 16 ГБ ОЗУ
 ```
 
-### Шаг 2 — Установи Ollama
-Скачай с **ollama.com** и установи.
-
-Затем скачай модель Mistral:
+### Установка Ollama и Mistral
 ```bash
+# Скачать и установить Ollama: https://ollama.com
 ollama pull mistral
-```
-
-Запусти Ollama (должен работать в фоне):
-```bash
 ollama serve
 ```
 
-### Шаг 3 — Убедись что в `services/openai_service.py` используется локальный режим
+### Производительность
 
-Файл уже настроен на локальные модели по умолчанию:
-```python
-import whisper
-import ollama
+| Конфигурация | Транскрипция | Классификация |
+|---|---|---|
+| CPU (без GPU) | 15–30 сек | 5–10 сек |
+| NVIDIA RTX 3060 | 2–5 сек | 2–3 сек |
+| NVIDIA RTX 4090 | < 1 сек | < 1 сек |
 
-# Транскрипция через локальный Whisper
-async def transcribe(audio_path):
-    model = get_whisper_model()
-    result = model.transcribe(audio_path, language="ru")
-    return result["text"]
+> Предупреждение `FP16 is not supported on CPU` является штатным. Whisper автоматически переключается в режим FP32.
 
-# Классификация через локальный Mistral
-async def classify(text):
-    response = ollama.chat(model="mistral", messages=[...])
-    ...
-```
+---
 
-## Запуск на OpenAI
+## Режим OpenAI
 
-Если хочешь использовать GPT-4o и Whisper API вместо локальных моделей — замени содержимое `services/openai_service.py`:
+В данном режиме используются API-сервисы OpenAI: `whisper-1` для транскрипции и `gpt-4o` для классификации.
 
-### Шаг 1 — Добавь API ключ в `.env`
+Установите переменные окружения:
 ```env
-OPENAI_API_KEY=sk-proj-...твой_ключ...
-```
-
-### Шаг 2 — Замени `services/openai_service.py`
-
-```python
-from openai import AsyncOpenAI
-from datetime import datetime
-import json, re, pytz
-
-client = AsyncOpenAI()
-
-CLASSIFY_PROMPT = """..."""  # оставь тот же промпт
-
-CATEGORY_EMOJI = { ... }  # оставь тот же словарь
-
-async def transcribe(audio_path: str) -> str:
-    with open(audio_path, "rb") as f:
-        result = await client.audio.transcriptions.create(
-            model="whisper-1",
-            file=f,
-            language="ru"
-        )
-    return result.text
-
-async def classify(text: str) -> dict:
-    for attempt in range(3):
-        try:
-            response = await client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": CLASSIFY_PROMPT},
-                    {"role": "user", "content": text}
-                ],
-                temperature=0
-            )
-            raw = response.choices[0].message.content.strip()
-            raw = re.sub(r"```json|```", "", raw).strip()
-            return json.loads(raw)
-        except Exception as e:
-            print(f"Ошибка classify (попытка {attempt+1}): {e}")
-            if attempt == 2:
-                return {"category": "chaos", "summary": text[:100],
-                        "remind_at": None, "has_explicit_time": False, "source": "owner"}
-
-# parse_time оставь как есть — regex парсер надёжнее любой модели
+AI_MODE=openai
+OPENAI_API_KEY=sk-proj-...
 ```
 
 ### Сравнение режимов
-| | Локальные модели | OpenAI |
+
+| Параметр | Локальные модели | OpenAI |
 |---|---|---|
-| Стоимость | Бесплатно | ~$0.01-0.05 за сообщение |
-| Скорость | 5-30 сек | 1-3 сек |
-| Точность | Хорошая | Отличная |
-| Интернет | Не нужен | Обязателен |
-| Приватность | Полная | Данные на серверах OpenAI |
+| Стоимость | Бесплатно | ~$0.01–0.05 за запрос |
+| Скорость ответа | 5–30 сек | 1–3 сек |
+| Точность | Высокая | Максимальная |
+| Требования к сети | Не требуется | Обязательно |
+| Конфиденциальность | Полная | Данные передаются в OpenAI |
 
 ---
 
----
+## Развёртывание через Docker
 
-## Запуск через Docker (OpenAI режим)
+Docker-сборка рекомендуется для развёртывания у клиентов или на удалённом сервере. Поддерживается **только режим OpenAI** (`AI_MODE=openai`). Размер образа составляет ~500 МБ.
 
-Docker — самый простой способ запустить бота для клиентов или на сервере.
-Работает **только с OpenAI режимом** (`AI_MODE=openai`) — контейнер лёгкий (~500MB).
-
-> Локальные модели (Whisper + Ollama) не подходят для Docker — они весят ~8-10GB и требуют GPU.
+> Локальные модели (Whisper + Ollama) не поддерживаются в Docker-окружении ввиду требований к ресурсам (~8–10 ГБ) и необходимости GPU.
 
 ### Требования
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) или Docker Engine (Linux)
-- OpenAI API ключ
-- Telegram Bot Token
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS) или Docker Engine (Linux)
+- API-ключ OpenAI
+- Токен Telegram-бота
 
-### Шаг 1 — Клонируй репозиторий
+### Шаг 1 — Клонирование
 ```bash
-git clone https://github.com/ТВО_USERNAME/second-brain-bot.git
+git clone https://github.com/USERNAME/second-brain-bot.git
 cd second-brain-bot
 ```
 
-### Шаг 2 — Создай `.env` из шаблона
+### Шаг 2 — Настройка окружения
 ```bash
 cp .env.example .env
 ```
 
-Заполни `.env`:
+Заполните `.env`:
 ```env
 AI_MODE=openai
-BOT_TOKEN=токен_от_BotFather
-OPENAI_API_KEY=sk-proj-...
-OWNER_CHAT_ID=твой_telegram_id
-ANALYTICS_PASSWORD=придумай_пароль
-DB_PASSWORD=придумай_пароль_для_бд
-DATABASE_URL=postgresql://postgres:придумай_пароль_для_бд@db:5432/secondbrain
+BOT_TOKEN=<токен от @BotFather>
+OPENAI_API_KEY=<ключ с platform.openai.com>
+OWNER_CHAT_ID=<ваш Telegram ID>
+ANALYTICS_PASSWORD=<пароль для дашборда>
+DB_PASSWORD=<пароль для базы данных>
+DATABASE_URL=postgresql://postgres:<DB_PASSWORD>@db:5432/secondbrain
 ```
 
-> ⚠️ `DATABASE_URL` должен содержать тот же пароль что и `DB_PASSWORD`, и хост `db` (не localhost).
+> `DATABASE_URL` должен содержать тот же пароль, что и `DB_PASSWORD`. Хост — `db` (не `localhost`).
 
-### Шаг 3 — Запусти
+### Шаг 3 — Запуск
 ```bash
 docker-compose up -d
 ```
 
-Docker сам поднимет три контейнера:
-- `secondbrain_db` — PostgreSQL база данных
-- `secondbrain_bot` — Telegram бот
-- `secondbrain_analytics` — веб-аналитика на порту 8000
+Будут запущены три контейнера:
+- `secondbrain_db` — PostgreSQL
+- `secondbrain_bot` — Telegram-бот
+- `secondbrain_analytics` — веб-аналитика (порт 8000)
 
-### Шаг 4 — Проверь
+### Шаг 4 — Проверка
 ```bash
-# Посмотреть логи бота
 docker logs secondbrain_bot -f
-
-# Посмотреть все контейнеры
 docker ps
 ```
 
-Аналитика доступна на **http://localhost:8000**
+Панель аналитики: **http://localhost:8000**
 
-### Полезные команды Docker
+### Управление контейнерами
+
 ```bash
-# Остановить всё
+# Остановка
 docker-compose down
 
-# Перезапустить после изменений в коде
+# Пересборка после изменений в коде
 docker-compose up -d --build
 
-# Посмотреть логи аналитики
-docker logs secondbrain_analytics -f
-
-# Удалить всё включая базу данных
+# Полный сброс включая базу данных
 docker-compose down -v
 ```
 
 ### Сравнение способов запуска
-| | Python напрямую | Docker |
+
+| | Прямой запуск (Python) | Docker |
 |---|---|---|
-| Сложность | Средняя | Низкая |
-| Требования | Python + PostgreSQL + ffmpeg | Только Docker |
-| AI режим | local или openai | Только openai |
-| Для кого | Разработчик | Клиент / сервер |
+| Сложность настройки | Средняя | Низкая |
+| Зависимости | Python, PostgreSQL, ffmpeg | Только Docker |
+| Режим AI | `local` или `openai` | Только `openai` |
+| Назначение | Разработка | Продакшен / передача клиенту |
 
 ---
 
@@ -437,74 +389,86 @@ docker-compose down -v
 
 | Команда | Описание |
 |---------|----------|
-| `/start` | Главное меню / онбординг |
-| `/tasks` | Все незакрытые задачи |
-| `/today` | Записи за сегодня |
-| `/week` | Итоги за неделю |
-| `/ideas` | Идеи за 7 дней |
-| `/notes` | Заметки за 7 дней |
-| `/memory` | Всё что бот знает о тебе |
-| `/digest` | Вечерняя сводка вручную |
-| `/guest` | Отправить задачу партнёру |
+| `/start` | Главное меню, онбординг, смена роли |
+| `/tasks` | Список активных незакрытых задач |
+| `/today` | Записи текущего дня по категориям |
+| `/week` | Статистика за последние 7 дней |
+| `/ideas` | Идеи за последние 7 дней |
+| `/notes` | Заметки за последние 7 дней |
+| `/memory` | Все записи за последние 30 дней |
+| `/digest` | Ручной вызов вечерней сводки |
+| `/guest` | Отправка задачи другому пользователю |
 
 ---
 
 ## Веб-аналитика
 
-FastAPI дашборд с метриками и графиками.
+FastAPI-приложение с дашбордом метрик и графиков.
 
-### Запуск
+### Запуск (без Docker)
 ```bash
 python -m uvicorn analytics_web.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Открой **http://127.0.0.1:8000** и введи пароль из `.env` (`ANALYTICS_PASSWORD`).
+Адрес: **http://127.0.0.1:8000**  
+Доступ защищён паролем (`ANALYTICS_PASSWORD` из `.env`).
 
-### Метрики на дашборде
-- Всего пользователей / активных за 7 дней
-- Платящих пользователей / конверсия триал → платный
-- Всего записей / выполненных задач / незакрытых
-- Зомби-задачи (3+ напоминания, не выполнены)
+### Метрики
+
+- Общее число пользователей / активных за 7 дней
+- Число платящих пользователей / конверсия из пробного периода
+- Всего записей / выполненных задач / незакрытых задач
+- «Зомби»-задачи (3 и более напоминания без выполнения)
 - Гостевые записи
-- Графики: категории / новые пользователи / записи по дням
-- Таблица всех пользователей
+- Графики: распределение по категориям, прирост пользователей, динамика записей за 14 дней
+- Таблица пользователей с детализацией
 
 ---
 
 ## Переменные окружения
 
 | Переменная | Обязательна | Описание |
-|------------|-------------|----------|
-| `BOT_TOKEN` | ✅ | Токен бота от @BotFather |
-| `DATABASE_URL` | ✅ | postgresql://user:pass@host:port/db |
-| `ANALYTICS_PASSWORD` | ✅ | Пароль для дашборда |
-| `OPENAI_API_KEY` | ❌ | Нужен только для режима OpenAI |
-| `PAYMENT_TOKEN` | ❌ | Токен ЮКасса для приёма оплаты |
-| `WEBHOOK_URL` | ❌ | URL для деплоя на сервер |
+|------------|:-----------:|----------|
+| `BOT_TOKEN` | ✅ | Токен бота, полученный у @BotFather |
+| `DATABASE_URL` | ✅ | Строка подключения к PostgreSQL |
+| `OWNER_CHAT_ID` | ✅ | Telegram ID владельца бота |
+| `ANALYTICS_PASSWORD` | ✅ | Пароль для входа в панель аналитики |
+| `AI_MODE` | ✅ | Режим AI: `local` или `openai` |
+| `OPENAI_API_KEY` | ❌ | Требуется при `AI_MODE=openai` |
+| `DB_PASSWORD` | ❌ | Пароль БД (используется в docker-compose) |
+| `PAYMENT_TOKEN` | ❌ | Токен платёжной системы ЮКасса |
+| `WEBHOOK_URL` | ❌ | URL вебхука для продакшен-деплоя |
 
 ---
 
 ## Монетизация
 
-- Триал: **7 дней бесплатно**
-- Подписка: **299 ₽/месяц**
-- Платёжная система: ЮКасса (настраивается через `PAYMENT_TOKEN`)
-- При оплате владельцу приходит уведомление в Telegram
+- Пробный период: **7 дней** бесплатно
+- Подписка: **299 ₽ / месяц**
+- Платёжная система: ЮКасса (`PAYMENT_TOKEN`)
+- При успешной оплате владелец получает уведомление в Telegram
 
-> ⚠️ Middleware проверки подписки (`bot/middlewares/subscription.py`) в v1.0.0 временно отключена для тестирования. Перед продакшеном раскомментируй логику проверки.
+> **Примечание:** Middleware проверки подписки (`bot/middlewares/subscription.py`) в текущей версии отключён. Перед выводом в продакшен необходимо раскомментировать логику валидации.
 
 ---
 
 ## Технологии
 
-| Стек | Версия |
-|------|--------|
-| Python | 3.10+ |
-| aiogram | 3.x |
-| SQLAlchemy | 2.x |
-| PostgreSQL | 14+ |
-| APScheduler | 3.x |
-| FastAPI | 0.x |
-| Whisper (локально) | openai-whisper |
-| Ollama + Mistral | latest |
-| OpenAI (опционально) | gpt-4o + whisper-1 |
+| Компонент | Технология |
+|-----------|------------|
+| Язык | Python 3.11 |
+| Telegram API | aiogram 3.x |
+| База данных | PostgreSQL 14+ / SQLAlchemy 2.x |
+| Планировщик | APScheduler 3.x |
+| Веб-аналитика | FastAPI + Jinja2 |
+| Транскрипция (local) | openai-whisper |
+| Классификация (local) | Ollama + Mistral |
+| Транскрипция (cloud) | OpenAI Whisper API |
+| Классификация (cloud) | OpenAI GPT-4o |
+
+---
+
+## Автор
+
+Igor Muzyka (@muzyka410)  
+Версия: **v1.0.0** · Март 2026
