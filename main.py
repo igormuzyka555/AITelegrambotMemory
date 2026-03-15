@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
@@ -8,6 +9,18 @@ from bot.middlewares.subscription import SubscriptionMiddleware
 import os
 
 load_dotenv()
+
+# ── ЛОГИРОВАНИЕ ───────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(name)s | %(levelname)s | %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+# ─────────────────────────────────────────────────────────────────────────
 
 bot = Bot(token=os.getenv("BOT_TOKEN"))
 dp = Dispatcher(storage=MemoryStorage())
@@ -27,12 +40,10 @@ def restore_reminders():
     entries = get_all_pending_reminders()
     for entry in entries:
         if entry.remind_at:
-            # Конвертируем remind_at в московское время
             remind_at = entry.remind_at
             if remind_at.tzinfo is None:
                 remind_at = pytz.utc.localize(remind_at).astimezone(moscow_tz)
 
-            # Если время уже прошло — напомним через 1 минуту
             if remind_at < now:
                 from datetime import timedelta
                 remind_at = now + timedelta(minutes=1)
@@ -40,18 +51,16 @@ def restore_reminders():
             schedule_reminder(bot, entry.id, entry.user_id, remind_at)
             restored += 1
 
-    print(f"Восстановлено напоминаний: {restored}")
+    logger.info(f"Восстановлено напоминаний: {restored}")
 
 
 async def main():
     init_db()
-    print("База данных готова!")
+    logger.info("База данных готова!")
 
-    # Подключаем middleware
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
 
-    # Подключаем роутеры
     from bot.handlers import onboarding, guest, capture, recall, digest, views
     dp.include_router(onboarding.router)
     dp.include_router(guest.router)
@@ -60,17 +69,12 @@ async def main():
     dp.include_router(digest.router)
     dp.include_router(views.router)
 
-    # Запускаем планировщик
     start_scheduler()
-    print("Планировщик запущен!")
+    logger.info("Планировщик запущен!")
 
-    # Восстанавливаем напоминания из БД
     restore_reminders()
-
-    # Планируем вечерние сводки для всех пользователей
     schedule_daily_digests(bot)
 
-    # Устанавливаем меню команд
     from aiogram.types import BotCommand
     await bot.set_my_commands([
         BotCommand(command="start",   description="🏠 Главное меню"),
@@ -83,9 +87,9 @@ async def main():
         BotCommand(command="digest",  description="🌙 Сводка за сегодня"),
         BotCommand(command="guest",   description="🤝 Отправить сообщение партнёру"),
     ])
-    print("Меню команд установлено!")
+    logger.info("Меню команд установлено!")
 
-    print("Бот запущен!")
+    logger.info("Бот запущен!")
     await dp.start_polling(bot)
 
 
