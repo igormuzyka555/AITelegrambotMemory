@@ -13,7 +13,6 @@ templates = Jinja2Templates(directory="analytics_web/templates")
 
 engine = create_engine(os.getenv("DATABASE_URL"))
 ANALYTICS_PASSWORD = os.getenv("ANALYTICS_PASSWORD", "admin123")
-OWNER_CHAT_ID = os.getenv("OWNER_CHAT_ID")
 
 
 def check_password(password: str = ""):
@@ -153,13 +152,13 @@ async def payment_webhook(request: Request):
     amount = data.get("amount", "299")
     username = data.get("username", "—")
 
-    if OWNER_CHAT_ID:
+    if user_id:
         bot_token = os.getenv("BOT_TOKEN")
-        text_msg = f"💰 Новая подписка!\n\nПользователь: @{username}\nID: {user_id}\nСумма: {amount} ₽"
+        text_msg = f"💰 Оплата получена!\n\nПодписка оформлена на 30 дней. Спасибо! 🧠"
         async with httpx.AsyncClient() as client:
             await client.post(
                 f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                json={"chat_id": OWNER_CHAT_ID, "text": text_msg}
+                json={"chat_id": user_id, "text": text_msg}
             )
 
     return {"ok": True}
